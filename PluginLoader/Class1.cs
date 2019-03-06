@@ -11,6 +11,7 @@ using System.Xml.Serialization;
 using System.IO;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
+using ConfigFramework;
 
 namespace PluginLoader
 {
@@ -98,6 +99,7 @@ namespace PluginLoader
         public string[] GetPluginDependencies() => dependencies;
         internal FileInfo GetPluginFile() => pluginFile;
         internal PluginLoader GetPluginLoader() => loader;
+        internal DirectoryInfo GetPluginDataDirectory() => new DirectoryInfo($"{GetPluginFile().Directory.FullName}\\{name}");
     }
 
     public sealed class PluginData : Attribute
@@ -239,11 +241,17 @@ namespace PluginLoader
                         //Load Reguardless.
                         plugin.OnPluginLoaded(this);
                         plugin.Enable();
+                        //Create plugin data directory.
+                        if (!(plugin.GetPluginDataDirectory().Exists))
+                            plugin.GetPluginDataDirectory().Create();
                     }
                     else
                     {
                         plugin.OnPluginLoaded(this);
                         plugin.Enable();
+                        //Create plugin data directory.
+                        if (!(plugin.GetPluginDataDirectory().Exists))
+                            plugin.GetPluginDataDirectory().Create();
                     }
                 }
             }
@@ -284,11 +292,17 @@ namespace PluginLoader
                 //Load Reguardless.
                 plugin.OnPluginLoaded(this);
                 plugin.Enable();
+                //Create plugin data directory.
+                if (!(plugin.GetPluginDataDirectory().Exists))
+                    plugin.GetPluginDataDirectory().Create();
             }
             else
             {
                 plugin.OnPluginLoaded(this);
                 plugin.Enable();
+                //Create plugin data directory.
+                if (!(plugin.GetPluginDataDirectory().Exists))
+                    plugin.GetPluginDataDirectory().Create();
             }
         }
 
@@ -400,125 +414,178 @@ namespace PluginLoader
         public DependencyNotFoundException(Plugin p) : base($"The specified plugin \"{p.GetPluginName()}\", with ID: \"{p.GetPluginID()}\", could not be found or it was not loaded.") { }
         public DependencyNotFoundException(Plugin p, Exception exception) : base($"The specified plugin \"{p.GetPluginName()}\", with ID: \"{p.GetPluginID()}\", could not be found or it was not loaded.", exception) { }
     }
-
-    
 }
 
 namespace PluginLoader.Configuration
 {
-    public static class ConfigUtils
+    public class Config
     {
-        public static class JSON
-        {
-            public static string WriteJSON(object obj)
-            {
-                return JsonConvert.SerializeObject(obj, Newtonsoft.Json.Formatting.Indented);
-            }
-
-            public static T ReadJSON<T>(string json)
-            {
-                return JsonConvert.DeserializeObject<T>(json);
-            }
-        }
-
-        public static class YAML
-        {
-            public static string WriteYAML(object obj)
-            {
-                Serializer serializer = new Serializer();
-                return serializer.Serialize(obj);
-            }
-
-            public static T ReadYAML<T>(string yaml)
-            {
-                Deserializer deserializer = new Deserializer();
-                return deserializer.Deserialize<T>(yaml);
-            }
-        }
-
-        public static class XML
-        {
-            private static XmlSerializer xmlSerializer = null;
-
-            public static string WriteXML(object obj)
-            {
-                xmlSerializer = new XmlSerializer(obj.GetType());
-                var sw = new StringWriter();
-                xmlSerializer.Serialize(sw, obj);
-                return sw.ToString();
-            }
-
-            public static T ReadXML<T>(string xml)
-            {
-                xmlSerializer = new XmlSerializer(typeof(T));
-                var x = xmlSerializer.Deserialize(new StringReader(xml));
-                return (T)x;
-            }
-        }
-
-        //public static class FileReader
-        //{
-        //    public static string ReadAllText(string path)
-        //    {
-        //        using (StreamReader reader = new StreamReader(path))
-        //        {
-        //            return reader.ReadToEnd();
-        //        }
-        //    }
-
-        //    public static string ReadLine(string path, int line)
-        //    {
-        //        using (StreamReader reader = new StreamReader(path))
-        //        {
-        //            var x = reader.ReadToEnd();
-        //            var s = x.Split('\n');
-        //            List<string> sx = new List<string>();
-        //            foreach (string sx_ in s)
-        //            {
-        //                sx.Add(sx_);
-        //            }
-        //            var xx = sx[line];
-        //            return xx;
-        //        }
-        //    }
-        //}
-
-        //public static class FileWriter
-        //{
-        //    public static void WriteText(string path, string text)
-        //    {
-        //        using (StreamWriter sw = new StreamWriter(path))
-        //        {
-        //            sw.WriteLine(text);
-        //            sw.Flush();
-        //            sw.Close();
-        //        }
-        //    }
-        //}
+        
     }
 
-    //TODO: LATER!
-    public sealed class ConfigurationFile
+    public sealed class ConfigManager
     {
-        private FileInfo configFile = null;
-        private JObject jObject = null;
-        private ConfigType configType = ConfigType.JSON;
+        private FileInfo info = null;
+        private ConfigMode mode = ConfigMode.JSON;
 
-        public enum ConfigType
+        internal ConfigManager(FileInfo info, ConfigMode mode)
         {
-            JSON = 0,
-            YAML = 1,
-            XML = 2
+            this.info = info;
+            this.mode = mode;
         }
 
-        //public static ConfigurationFile Create(Plugin plugin)
-        //{
-        //    ConfigurationFile file = new ConfigurationFile(
-        //        plugin.GetPluginLoader().PluginDirectory + $"\\{plugin.GetPluginName()}"
-        //        );
-        //    if (!(file.configFile.Exists))
-        //        file.configFile.Create();
-        //    return file;
-        //}
+        public void WriteConfig(Config c)
+        {
+            if (mode == ConfigMode.JSON)
+            {
+                using (StreamWriter writer = new StreamWriter(info.FullName, true))
+                {
+                    var x = ConfigUtils.JSON.WriteJSON(c);
+                    writer.Write($"{ReadText()}\n{x}");
+                    writer.Flush();
+                    writer.Close();
+                }
+            }
+            else if (mode == ConfigMode.YAML)
+            {
+                using (StreamWriter writer = new StreamWriter(info.FullName, true))
+                {
+                    var x = ConfigUtils.YAML.WriteYAML(c);
+                    writer.Write($"{ReadText()}\n{x}");
+                    writer.Flush();
+                    writer.Close();
+                }
+
+            }
+            else
+            {
+                using (StreamWriter writer = new StreamWriter(info.FullName, true))
+                {
+                    var x = ConfigUtils.XML.WriteXML(c);
+                    writer.Write($"{ReadText()}\n{x}");
+                    writer.Flush();
+                    writer.Close();
+                }
+            }
+        }
+
+        public Config ReadConfig()
+        {
+            if (mode == ConfigMode.JSON)
+            {
+                var x = ReadText();
+                return ConfigUtils.JSON.ReadJSON<Config>(x);
+            }
+            else if (mode == ConfigMode.YAML)
+            {
+                var x = ReadText();
+                return ConfigUtils.YAML.ReadYAML<Config>(x);
+            }
+            else
+            {
+                var x = ReadText();
+                return ConfigUtils.XML.ReadXML<Config>(x);
+            }
+        }
+
+        private string ReadText()
+        {
+            using (StreamReader reader = new StreamReader(info.FullName))
+            {
+                return reader.ReadToEnd();
+            }
+        }
+
+        public static ConfigManager CreateConfig(Plugin plugin, ConfigMode mode = ConfigMode.JSON)
+        {
+            if (mode == ConfigMode.JSON)
+            {
+                string path = $"{plugin.GetPluginDataDirectory().FullName}\\{plugin.GetPluginName()}.json";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else if (mode == ConfigMode.YAML)
+            {
+                string path = $"{plugin.GetPluginDataDirectory().FullName}\\{plugin.GetPluginName()}.yaml";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else if (mode == ConfigMode.XML)
+            {
+                string path = $"{plugin.GetPluginDataDirectory().FullName}\\{plugin.GetPluginName()}.xml";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else return null;
+        }
+        public static ConfigManager CreateConfig(Plugin plugin, string name, ConfigMode mode = ConfigMode.JSON)
+        {
+            if (mode == ConfigMode.JSON)
+            {
+                string path = $"{plugin.GetPluginDataDirectory()}\\{name}.json";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else if (mode == ConfigMode.YAML)
+            {
+                string path = $"{plugin.GetPluginDataDirectory()}\\{name}.yaml";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else if (mode == ConfigMode.XML)
+            {
+                string path = $"{plugin.GetPluginDataDirectory()}\\{name}.xml";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else return null;
+        }
+        public static ConfigManager CreateConfig(Plugin plugin, string subFolder ,string name, ConfigMode mode = ConfigMode.JSON)
+        {
+            if (mode == ConfigMode.JSON)
+            {
+                string path = $"{plugin.GetPluginDataDirectory()}\\{subFolder}\\{name}.json";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else if (mode == ConfigMode.YAML)
+            {
+                string path = $"{plugin.GetPluginDataDirectory()}\\{subFolder}\\{name}.yaml";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else if (mode == ConfigMode.XML)
+            {
+                string path = $"{plugin.GetPluginDataDirectory()}\\{subFolder}\\{name}.xml";
+                FileInfo info = new FileInfo(path);
+                if (!(info.Exists))
+                    info.Create();
+                return new ConfigManager(info, mode);
+            }
+            else return null;
+        }
+    }
+
+    public enum ConfigMode
+    {
+        JSON,
+        YAML,
+        XML
     }
 }
